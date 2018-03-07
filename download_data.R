@@ -2,6 +2,7 @@ library(tidyverse)
 library(httr)
 library(jsonlite)
 library(curl)
+library(lubridate)
 
 
 # GET TOKEN ---------------------------------------------------------------
@@ -10,19 +11,27 @@ source("k:/dept/DIGITAL E-COMMERCE/E-COMMERCE/Report E-Commerce/data_lake/token/
 
 
 # LIST FILES --------------------------------------------------------------
-path <- "sales/ecommerce"
+path <- "sales/retail"
 r <- httr::GET(paste0("https://pradadigitaldatalake.azuredatalakestore.net/webhdfs/v1/",path,"?op=LISTSTATUS"),add_headers(Authorization = paste0("Bearer ",res$access_token)))
-toJSON(jsonlite::fromJSON(content(r,"text")), pretty = TRUE) %>% fromJSON(simplifyDataFrame = T)
+files <- toJSON(jsonlite::fromJSON(content(r,"text")), pretty = TRUE) %>% fromJSON(simplifyDataFrame = T)
+files <- files$FileStatuses$FileStatus
 
 
 
 # READ DATA ---------------------------------------------------------------
-data_lake_file <- paste0(path,"/ecommerce_2017.csv")
-r <- httr::GET(paste0("https://pradadigitaldatalake.azuredatalakestore.net/webhdfs/v1/",data_lake_file,"?op=OPEN&read=true"),
-               add_headers(Authorization = paste0("Bearer ",res$access_token)))
+fetch_file <- function(f){
+        data_lake_file <- paste0(path,"/",f)
+        r <- httr::GET(paste0("https://pradadigitaldatalake.azuredatalakestore.net/webhdfs/v1/",data_lake_file,"?op=OPEN&read=true"),
+                       add_headers(Authorization = paste0("Bearer ",res$access_token)))
+        
+        writeBin(content(r), "data/temp.csv")
+        res <- read_csv2("data/temp.csv", col_types = cols(.default = col_character()))
+        file.remove("data/temp.csv")
+        message(paste0("fetched file ",f))
+        res
+        
+}
 
-writeBin(content(r), "data/temp.csv")
 
-
-
+df <- map_df(files$pathSuffix, fetch_file)
 
